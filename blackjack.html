@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>HighRoller Casino - Blackjack</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <!-- NAVBAR -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <span class="brand-logo">♠</span>
+            <a href="index.html">HighRoller Casino</a>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="blackjack.html" class="active">Blackjack</a>
+            <a href="poker.html">Video Poker</a>
+        </nav>
+    </header>
+
+    <main class="game-page">
+        <section class="game-header">
+            <h1>Blackjack</h1>
+            <p>Try to beat the dealer by getting as close to 21 as you can without going over.</p>
+        </section>
+
+        <section class="game-layout">
+            <div class="table felt">
+                <div class="table-header">
+                    <div>
+                        <h2>Dealer</h2>
+                        <p>Total: <span id="dealer-total">0</span></p>
+                    </div>
+                    <div>
+                        <h2>You</h2>
+                        <p>Total: <span id="player-total">0</span></p>
+                    </div>
+                </div>
+
+                <div class="table-row">
+                    <div class="hand" id="dealer-hand"></div>
+                    <div class="hand" id="player-hand"></div>
+                </div>
+            </div>
+
+            <aside class="game-sidebar">
+                <div class="panel">
+                    <h3>Betting</h3>
+                    <div class="chip-row">
+                        <button class="chip-btn" data-amount="10">$10</button>
+                        <button class="chip-btn" data-amount="25">$25</button>
+                        <button class="chip-btn" data-amount="50">$50</button>
+                        <button class="chip-btn" data-amount="100">$100</button>
+                    </div>
+                    <label class="field">
+                        Current Bet:
+                        <input type="number" id="bet-input" value="50" min="10" step="10" />
+                    </label>
+                    <p class="balance">Balance: $<span id="balance">1000</span></p>
+                </div>
+
+                <div class="panel">
+                    <h3>Controls</h3>
+                    <div class="button-group">
+                        <button id="deal-btn" class="btn primary full">Deal</button>
+                        <button id="hit-btn" class="btn full" disabled>Hit</button>
+                        <button id="stand-btn" class="btn ghost full" disabled>Stand</button>
+                        <button id="new-round-btn" class="btn subtle full" disabled>New Round</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Game Log</h3>
+                    <div id="log" class="log-box"></div>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>Blackjack · HighRoller Casino</p>
+    </footer>
+
+    <script>
+        // ---------- Blackjack Logic ----------
+        const suits = ["♠", "♥", "♦", "♣"];
+        const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+
+        let deck = [];
+        let dealerHand = [];
+        let playerHand = [];
+        let balance = 1000;
+        let currentBet = 50;
+        let roundOver = false;
+
+        const dealerHandEl = document.getElementById("dealer-hand");
+        const playerHandEl = document.getElementById("player-hand");
+        const dealerTotalEl = document.getElementById("dealer-total");
+        const playerTotalEl = document.getElementById("player-total");
+        const balanceEl = document.getElementById("balance");
+        const betInput = document.getElementById("bet-input");
+        const logEl = document.getElementById("log");
+
+        const dealBtn = document.getElementById("deal-btn");
+        const hitBtn = document.getElementById("hit-btn");
+        const standBtn = document.getElementById("stand-btn");
+        const newRoundBtn = document.getElementById("new-round-btn");
+
+        function createDeck() {
+            deck = [];
+            for (let s of suits) {
+                for (let r of ranks) {
+                    deck.push({ suit: s, rank: r });
+                }
+            }
+            // Shuffle
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+        }
+
+        function cardValue(card) {
+            if (card.rank === "A") return 11;
+            if (["K", "Q", "J"].includes(card.rank)) return 10;
+            return parseInt(card.rank, 10);
+        }
+
+        function handTotal(hand) {
+            let total = 0;
+            let aces = 0;
+            for (let card of hand) {
+                total += cardValue(card);
+                if (card.rank === "A") aces++;
+            }
+            while (total > 21 && aces > 0) {
+                total -= 10;
+                aces--;
+            }
+            return total;
+        }
+
+        function renderHands(hideDealerHole = true) {
+            dealerHandEl.innerHTML = "";
+            playerHandEl.innerHTML = "";
+
+            dealerHand.forEach((card, idx) => {
+                const div = document.createElement("div");
+                div.className = "card";
+                if (idx === 0 && hideDealerHole && !roundOver) {
+                    div.classList.add("card-back");
+                } else {
+                    div.innerHTML = `
+                        <span class="card-rank">${card.rank}</span>
+                        <span class="card-suit">${card.suit}</span>
+                    `;
+                    if (card.suit === "♥" || card.suit === "♦") {
+                        div.classList.add("red");
+                    }
+                }
+                dealerHandEl.appendChild(div);
+            });
+
+            playerHand.forEach((card) => {
+                const div = document.createElement("div");
+                div.className = "card";
+                div.innerHTML = `
+                    <span class="card-rank">${card.rank}</span>
+                    <span class="card-suit">${card.suit}</span>
+                `;
+                if (card.suit === "♥" || card.suit === "♦") {
+                    div.classList.add("red");
+                }
+                playerHandEl.appendChild(div);
+            });
+
+            dealerTotalEl.textContent = roundOver ? handTotal(dealerHand) : "?";
+            playerTotalEl.textContent = handTotal(playerHand);
+        }
+
+        function log(message) {
+            const p = document.createElement("p");
+            p.textContent = message;
+            logEl.prepend(p);
+        }
+
+        function resetRound() {
+            dealerHand = [];
+            playerHand = [];
+            roundOver = false;
+            createDeck();
+            renderHands();
+        }
+
+        function startRound() {
+            currentBet = parseInt(betInput.value, 10) || 10;
+            if (currentBet < 10) {
+                currentBet = 10;
+                betInput.value = 10;
+            }
+            if (currentBet > balance) {
+                log("Bet cannot exceed balance.");
+                return;
+            }
+
+            resetRound();
+
+            dealerHand.push(deck.pop());
+            dealerHand.push(deck.pop());
+            playerHand.push(deck.pop());
+            playerHand.push(deck.pop());
+            renderHands(true);
+
+            dealBtn.disabled = true;
+            hitBtn.disabled = false;
+            standBtn.disabled = false;
+            newRoundBtn.disabled = true;
+
+            log(`New round started. You bet $${currentBet}.`);
+        }
+
+        function endRound(outcome) {
+            roundOver = true;
+            renderHands(false);
+            let playerTotal = handTotal(playerHand);
+            let dealerTotal = handTotal(dealerHand);
+
+            if (outcome === "playerBust") {
+                balance -= currentBet;
+                log(`You bust with ${playerTotal}. You lose $${currentBet}.`);
+            } else if (outcome === "dealerBust") {
+                balance += currentBet;
+                log(`Dealer busts with ${dealerTotal}. You win $${currentBet}!`);
+            } else if (outcome === "playerWin") {
+                balance += currentBet;
+                log(`You win with ${playerTotal} vs dealer's ${dealerTotal}. +$${currentBet}!`);
+            } else if (outcome === "dealerWin") {
+                balance -= currentBet;
+                log(`Dealer wins with ${dealerTotal} vs your ${playerTotal}. -$${currentBet}.`);
+            } else {
+                log(`Push. You and dealer both have ${playerTotal}. Bet returned.`);
+            }
+
+            balanceEl.textContent = balance;
+            dealBtn.disabled = balance <= 0;
+            hitBtn.disabled = true;
+            standBtn.disabled = true;
+            newRoundBtn.disabled = balance > 0 ? false : true;
+
+            if (balance <= 0) {
+                log("You are out of chips! Refresh the page to start over.");
+            }
+        }
+
+        function dealerPlay() {
+            let dealerTotal = handTotal(dealerHand);
+            while (dealerTotal < 17) {
+                dealerHand.push(deck.pop());
+                dealerTotal = handTotal(dealerHand);
+            }
+
+            const playerTotal = handTotal(playerHand);
+
+            if (dealerTotal > 21) {
+                endRound("dealerBust");
+            } else if (dealerTotal > playerTotal) {
+                endRound("dealerWin");
+            } else if (dealerTotal < playerTotal) {
+                endRound("playerWin");
+            } else {
+                endRound("push");
+            }
+        }
+
+        // Event Listeners
+        dealBtn.addEventListener("click", startRound);
+
+        hitBtn.addEventListener("click", () => {
+            if (roundOver) return;
+            playerHand.push(deck.pop());
+            renderHands(true);
+            const total = handTotal(playerHand);
+            if (total > 21) {
+                endRound("playerBust");
+            }
+        });
+
+        standBtn.addEventListener("click", () => {
+            if (roundOver) return;
+            dealerPlay();
+        });
+
+        newRoundBtn.addEventListener("click", () => {
+            betInput.disabled = false;
+            dealBtn.disabled = false;
+            newRoundBtn.disabled = true;
+            log("Ready for a new round.");
+        });
+
+        document.querySelectorAll(".chip-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                betInput.value = btn.dataset.amount;
+            });
+        });
+
+        // Initialize
+        createDeck();
+        renderHands();
+        balanceEl.textContent = balance;
+    </script>
+</body>
+</html>

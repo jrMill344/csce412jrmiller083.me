@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>HighRoller Casino - Video Poker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <!-- NAVBAR -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <span class="brand-logo">♠</span>
+            <a href="index.html">HighRoller Casino</a>
+        </div>
+        <nav class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="blackjack.html">Blackjack</a>
+            <a href="poker.html" class="active">Video Poker</a>
+        </nav>
+    </header>
+
+    <main class="game-page">
+        <section class="game-header">
+            <h1>Video Poker</h1>
+            <p>Draw 5 cards, choose which to hold, then draw again to build your best hand.</p>
+        </section>
+
+        <section class="game-layout">
+            <div class="table felt poker-table">
+                <div class="hand-label">
+                    <h2>Your Hand</h2>
+                    <p>Result: <span id="hand-result">Place your bet and deal.</span></p>
+                </div>
+                <div class="hand" id="poker-hand"></div>
+            </div>
+
+            <aside class="game-sidebar">
+                <div class="panel">
+                    <h3>Betting</h3>
+                    <label class="field">
+                        Bet:
+                        <input type="number" id="poker-bet" value="50" min="10" step="10" />
+                    </label>
+                    <p class="balance">Balance: $<span id="poker-balance">1000</span></p>
+                </div>
+
+                <div class="panel">
+                    <h3>Controls</h3>
+                    <div class="button-group">
+                        <button id="poker-deal" class="btn primary full">Deal</button>
+                        <button id="poker-draw" class="btn full" disabled>Draw</button>
+                        <button id="poker-new" class="btn subtle full" disabled>New Hand</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Payouts (relative)</h3>
+                    <ul class="payout-list">
+                        <li><strong>Royal Flush</strong> – 250× bet</li>
+                        <li><strong>Straight Flush</strong> – 50× bet</li>
+                        <li><strong>Four of a Kind</strong> – 25× bet</li>
+                        <li><strong>Full House</strong> – 9× bet</li>
+                        <li><strong>Flush</strong> – 6× bet</li>
+                        <li><strong>Straight</strong> – 4× bet</li>
+                        <li><strong>Three of a Kind</strong> – 3× bet</li>
+                        <li><strong>Two Pair</strong> – 2× bet</li>
+                        <li><strong>Jacks or Better</strong> – 1× bet</li>
+                    </ul>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>Video Poker · HighRoller Casino</p>
+    </footer>
+
+    <script>
+        // ---------- Video Poker Logic ----------
+        const vpSuits = ["♠", "♥", "♦", "♣"];
+        const vpRanks = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+        let vpDeck = [];
+        let vpHand = [];
+        let vpBalance = 1000;
+        let vpBet = 50;
+        let hasDealt = false;
+        let hasDrawn = false;
+
+        const pokerHandEl = document.getElementById("poker-hand");
+        const pokerBalanceEl = document.getElementById("poker-balance");
+        const pokerBetInput = document.getElementById("poker-bet");
+        const pokerResultEl = document.getElementById("hand-result");
+
+        const pokerDealBtn = document.getElementById("poker-deal");
+        const pokerDrawBtn = document.getElementById("poker-draw");
+        const pokerNewBtn = document.getElementById("poker-new");
+
+        function createVpDeck() {
+            vpDeck = [];
+            for (let s of vpSuits) {
+                for (let r of vpRanks) {
+                    vpDeck.push({ suit: s, rank: r });
+                }
+            }
+            for (let i = vpDeck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [vpDeck[i], vpDeck[j]] = [vpDeck[j], vpDeck[i]];
+            }
+        }
+
+        function rankValue(rank) {
+            return vpRanks.indexOf(rank); // 0 - 12
+        }
+
+        function renderVpHand(interactive = true) {
+            pokerHandEl.innerHTML = "";
+            vpHand.forEach((card, idx) => {
+                const div = document.createElement("div");
+                div.className = "card poker-card";
+                div.dataset.index = idx;
+
+                div.innerHTML = `
+                    <span class="card-rank">${card.rank}</span>
+                    <span class="card-suit">${card.suit}</span>
+                    <span class="hold-label">HOLD</span>
+                `;
+                if (card.suit === "♥" || card.suit === "♦") {
+                    div.classList.add("red");
+                }
+                if (card.hold) {
+                    div.classList.add("held");
+                }
+
+                if (interactive) {
+                    div.addEventListener("click", () => {
+                        if (!hasDealt || hasDrawn) return;
+                        card.hold = !card.hold;
+                        renderVpHand(true);
+                    });
+                }
+
+                pokerHandEl.appendChild(div);
+            });
+        }
+
+        function evaluateHand(hand) {
+            // Returns {name, multiplier}
+            const ranks = hand.map(c => c.rank).sort((a, b) => rankValue(a) - rankValue(b));
+            const suits = hand.map(c => c.suit);
+
+            const isFlush = suits.every(s => s === suits[0]);
+
+            let isStraight = true;
+            for (let i = 1; i < ranks.length; i++) {
+                if (rankValue(ranks[i]) !== rankValue(ranks[i - 1]) + 1) {
+                    isStraight = false;
+                    break;
+                }
+            }
+
+            // Check for A-10-J-Q-K royal style (we’ll treat as high straight)
+            const isRoyal = isStraight && isFlush && ranks[0] === "10" && ranks[4] === "A";
+
+            // Count ranks
+            const counts = {};
+            for (let r of ranks) {
+                counts[r] = (counts[r] || 0) + 1;
+            }
+            const values = Object.values(counts).sort((a, b) => b - a);
+
+            const hasFour = values[0] === 4;
+            const hasThree = values[0] === 3;
+            const pairCount = values.filter(v => v === 2).length;
+
+            // Check Jacks or Better
+            const highPairs = ["J", "Q", "K", "A"];
+            let hasJacksOrBetter = false;
+            for (let r of highPairs) {
+                if (counts[r] === 2) {
+                    hasJacksOrBetter = true;
+                    break;
+                }
+            }
+
+            if (isRoyal) return { name: "Royal Flush", multiplier: 250 };
+            if (isStraight && isFlush) return { name: "Straight Flush", multiplier: 50 };
+            if (hasFour) return { name: "Four of a Kind", multiplier: 25 };
+            if (hasThree && pairCount === 1) return { name: "Full House", multiplier: 9 };
+            if (isFlush) return { name: "Flush", multiplier: 6 };
+            if (isStraight) return { name: "Straight", multiplier: 4 };
+            if (hasThree) return { name: "Three of a Kind", multiplier: 3 };
+            if (pairCount === 2) return { name: "Two Pair", multiplier: 2 };
+            if (hasJacksOrBetter) return { name: "Jacks or Better", multiplier: 1 };
+
+            return { name: "No Win", multiplier: 0 };
+        }
+
+        function startPokerHand() {
+            vpBet = parseInt(pokerBetInput.value, 10) || 10;
+            if (vpBet < 10) {
+                vpBet = 10;
+                pokerBetInput.value = 10;
+            }
+            if (vpBet > vpBalance) {
+                pokerResultEl.textContent = "Bet cannot exceed balance.";
+                return;
+            }
+
+            hasDealt = true;
+            hasDrawn = false;
+            createVpDeck();
+            vpHand = [];
+
+            for (let i = 0; i < 5; i++) {
+                vpHand.push({ ...vpDeck.pop(), hold: false });
+            }
+
+            vpBalance -= vpBet;
+            pokerBalanceEl.textContent = vpBalance;
+            pokerResultEl.textContent = "Select cards to HOLD, then click Draw.";
+
+            pokerDealBtn.disabled = true;
+            pokerDrawBtn.disabled = false;
+            pokerNewBtn.disabled = true;
+            pokerBetInput.disabled = true;
+
+            renderVpHand(true);
+        }
+
+        function drawPokerHand() {
+            if (!hasDealt || hasDrawn) return;
+            hasDrawn = true;
+
+            vpHand = vpHand.map(card => {
+                if (card.hold) return card;
+                return { ...vpDeck.pop(), hold: false };
+            });
+
+            renderVpHand(false);
+
+            const result = evaluateHand(vpHand);
+            if (result.multiplier > 0) {
+                const winAmount = result.multiplier * vpBet;
+                vpBalance += winAmount;
+                pokerResultEl.textContent = `${result.name}! You win $${winAmount}.`;
+            } else {
+                pokerResultEl.textContent = "No win. Better luck next hand!";
+            }
+
+            pokerBalanceEl.textContent = vpBalance;
+            pokerDrawBtn.disabled = true;
+            pokerNewBtn.disabled = vpBalance > 0 ? false : true;
+
+            if (vpBalance <= 0) {
+                pokerResultEl.textContent = "You're out of chips. Refresh to start over.";
+            }
+        }
+
+        function newPokerHand() {
+            hasDealt = false;
+            hasDrawn = false;
+            vpHand = [];
+            pokerHandEl.innerHTML = "";
+            pokerResultEl.textContent = "Place your bet and deal.";
+            pokerDealBtn.disabled = vpBalance <= 0;
+            pokerNewBtn.disabled = true;
+            pokerBetInput.disabled = false;
+        }
+
+        pokerDealBtn.addEventListener("click", startPokerHand);
+        pokerDrawBtn.addEventListener("click", drawPokerHand);
+        pokerNewBtn.addEventListener("click", newPokerHand);
+
+        // Init
+        createVpDeck();
+        pokerBalanceEl.textContent = vpBalance;
+    </script>
+</body>
+</html>
