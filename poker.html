@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>HighRoller Casino - Video Poker</title>
+    <title>HighRoller Casino - Texas Hold'em</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
@@ -17,265 +17,478 @@
         <nav class="nav-links">
             <a href="index.html">Home</a>
             <a href="blackjack.html">Blackjack</a>
-            <a href="poker.html" class="active">Video Poker</a>
+            <a href="poker.html" class="active">Texas Hold'em</a>
         </nav>
     </header>
 
     <main class="game-page">
         <section class="game-header">
-            <h1>Video Poker</h1>
-            <p>Draw 5 cards, choose which to hold, then draw again to build your best hand.</p>
+            <h1>Texas Hold'em</h1>
+            <p>
+                Heads-up Hold'em: you vs the dealer. Get two hole cards, watch the flop–turn–river,
+                and see who makes the best 5-card hand from 7 cards.
+            </p>
         </section>
 
         <section class="game-layout">
+            <!-- TABLE AREA -->
             <div class="table felt poker-table">
+                <!-- Dealer Hole Cards -->
                 <div class="hand-label">
-                    <h2>Your Hand</h2>
-                    <p>Result: <span id="hand-result">Place your bet and deal.</span></p>
+                    <h2>Dealer</h2>
+                    <p>Best Hand: <span id="dealer-hand-name">—</span></p>
                 </div>
-                <div class="hand" id="poker-hand"></div>
+                <div class="hand" id="dealer-hole"></div>
+
+                <!-- Board -->
+                <div class="hand-label" style="margin-top: 1rem;">
+                    <h2>Board</h2>
+                    <p>Stage: <span id="stage-label">Waiting to deal…</span></p>
+                </div>
+                <div class="hand" id="board-cards"></div>
+
+                <!-- Player Hole Cards -->
+                <div class="hand-label" style="margin-top: 1.2rem;">
+                    <h2>You</h2>
+                    <p>Best Hand: <span id="player-hand-name">—</span></p>
+                </div>
+                <div class="hand" id="player-hole"></div>
             </div>
 
+            <!-- SIDEBAR -->
             <aside class="game-sidebar">
                 <div class="panel">
                     <h3>Betting</h3>
                     <label class="field">
-                        Bet:
-                        <input type="number" id="poker-bet" value="50" min="10" step="10" />
+                        Bet per Hand:
+                        <input type="number" id="holdem-bet" value="50" min="10" step="10" />
                     </label>
-                    <p class="balance">Balance: $<span id="poker-balance">1000</span></p>
+                    <p class="balance">Balance: $<span id="holdem-balance">1000</span></p>
                 </div>
 
                 <div class="panel">
                     <h3>Controls</h3>
                     <div class="button-group">
-                        <button id="poker-deal" class="btn primary full">Deal</button>
-                        <button id="poker-draw" class="btn full" disabled>Draw</button>
-                        <button id="poker-new" class="btn subtle full" disabled>New Hand</button>
+                        <button id="holdem-deal" class="btn primary full">Deal Hand</button>
+                        <button id="holdem-next" class="btn full" disabled>Next Stage</button>
+                        <button id="holdem-new" class="btn subtle full" disabled>New Hand</button>
                     </div>
                 </div>
 
                 <div class="panel">
-                    <h3>Payouts (relative)</h3>
-                    <ul class="payout-list">
-                        <li><strong>Royal Flush</strong> – 250× bet</li>
-                        <li><strong>Straight Flush</strong> – 50× bet</li>
-                        <li><strong>Four of a Kind</strong> – 25× bet</li>
-                        <li><strong>Full House</strong> – 9× bet</li>
-                        <li><strong>Flush</strong> – 6× bet</li>
-                        <li><strong>Straight</strong> – 4× bet</li>
-                        <li><strong>Three of a Kind</strong> – 3× bet</li>
-                        <li><strong>Two Pair</strong> – 2× bet</li>
-                        <li><strong>Jacks or Better</strong> – 1× bet</li>
-                    </ul>
+                    <h3>Hand Log</h3>
+                    <div id="holdem-log" class="log-box"></div>
                 </div>
             </aside>
         </section>
     </main>
 
     <footer class="footer">
-        <p>Video Poker · HighRoller Casino</p>
+        <p>Texas Hold'em · HighRoller Casino</p>
     </footer>
 
     <script>
-        // ---------- Video Poker Logic ----------
-        const vpSuits = ["♠", "♥", "♦", "♣"];
-        const vpRanks = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
-        let vpDeck = [];
-        let vpHand = [];
-        let vpBalance = 1000;
-        let vpBet = 50;
-        let hasDealt = false;
-        let hasDrawn = false;
+        // ---------- Texas Hold'em Logic (Heads-Up) ----------
 
-        const pokerHandEl = document.getElementById("poker-hand");
-        const pokerBalanceEl = document.getElementById("poker-balance");
-        const pokerBetInput = document.getElementById("poker-bet");
-        const pokerResultEl = document.getElementById("hand-result");
+        const heSuits = ["♠", "♥", "♦", "♣"];
+        const heRanks = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
 
-        const pokerDealBtn = document.getElementById("poker-deal");
-        const pokerDrawBtn = document.getElementById("poker-draw");
-        const pokerNewBtn = document.getElementById("poker-new");
+        let heDeck = [];
+        let playerHole = [];
+        let dealerHole = [];
+        let board = [];
+        let heBalance = 1000;
+        let heBet = 50;
 
-        function createVpDeck() {
-            vpDeck = [];
-            for (let s of vpSuits) {
-                for (let r of vpRanks) {
-                    vpDeck.push({ suit: s, rank: r });
+        let stage = "idle"; 
+        // stages: idle → preflop → flop → turn → river → showdown
+
+        const dealerHoleEl = document.getElementById("dealer-hole");
+        const playerHoleEl = document.getElementById("player-hole");
+        const boardEl = document.getElementById("board-cards");
+        const stageLabelEl = document.getElementById("stage-label");
+        const playerHandNameEl = document.getElementById("player-hand-name");
+        const dealerHandNameEl = document.getElementById("dealer-hand-name");
+
+        const holdemBetInput = document.getElementById("holdem-bet");
+        const holdemBalanceEl = document.getElementById("holdem-balance");
+        const holdemLogEl = document.getElementById("holdem-log");
+
+        const holdemDealBtn = document.getElementById("holdem-deal");
+        const holdemNextBtn = document.getElementById("holdem-next");
+        const holdemNewBtn = document.getElementById("holdem-new");
+
+        // ----- Utility: Logging -----
+        function heLog(msg) {
+            const p = document.createElement("p");
+            p.textContent = msg;
+            holdemLogEl.prepend(p);
+        }
+
+        // ----- Deck & Cards -----
+        function heRankValue(rank) {
+            return heRanks.indexOf(rank); // 0..12
+        }
+
+        function createHeDeck() {
+            heDeck = [];
+            for (let s of heSuits) {
+                for (let r of heRanks) {
+                    heDeck.push({ suit: s, rank: r });
                 }
             }
-            for (let i = vpDeck.length - 1; i > 0; i--) {
+            // Shuffle
+            for (let i = heDeck.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [vpDeck[i], vpDeck[j]] = [vpDeck[j], vpDeck[i]];
+                [heDeck[i], heDeck[j]] = [heDeck[j], heDeck[i]];
             }
         }
 
-        function rankValue(rank) {
-            return vpRanks.indexOf(rank); // 0 - 12
+        function drawCard() {
+            return heDeck.pop();
         }
 
-        function renderVpHand(interactive = true) {
-            pokerHandEl.innerHTML = "";
-            vpHand.forEach((card, idx) => {
-                const div = document.createElement("div");
-                div.className = "card poker-card";
-                div.dataset.index = idx;
+        // ----- Rendering -----
+        function createCardElement(card, isBack = false) {
+            const div = document.createElement("div");
+            div.className = "card";
 
-                div.innerHTML = `
-                    <span class="card-rank">${card.rank}</span>
-                    <span class="card-suit">${card.suit}</span>
-                    <span class="hold-label">HOLD</span>
-                `;
-                if (card.suit === "♥" || card.suit === "♦") {
-                    div.classList.add("red");
-                }
-                if (card.hold) {
-                    div.classList.add("held");
-                }
+            if (isBack) {
+                div.classList.add("card-back");
+                return div;
+            }
 
-                if (interactive) {
-                    div.addEventListener("click", () => {
-                        if (!hasDealt || hasDrawn) return;
-                        card.hold = !card.hold;
-                        renderVpHand(true);
-                    });
-                }
+            if (card.suit === "♥" || card.suit === "♦") {
+                div.classList.add("red");
+            }
 
-                pokerHandEl.appendChild(div);
+            div.innerHTML = `
+                <span class="card-rank">${card.rank}</span>
+                <span class="card-suit">${card.suit}</span>
+            `;
+            return div;
+        }
+
+        function renderHoldem(showDealer = false) {
+            // Dealer hole cards
+            dealerHoleEl.innerHTML = "";
+            dealerHole.forEach((card) => {
+                const el = createCardElement(card, !showDealer);
+                dealerHoleEl.appendChild(el);
             });
-        }
 
-        function evaluateHand(hand) {
-            // Returns {name, multiplier}
-            const ranks = hand.map(c => c.rank).sort((a, b) => rankValue(a) - rankValue(b));
-            const suits = hand.map(c => c.suit);
+            // Player hole cards
+            playerHoleEl.innerHTML = "";
+            playerHole.forEach((card) => {
+                const el = createCardElement(card, false);
+                playerHoleEl.appendChild(el);
+            });
 
-            const isFlush = suits.every(s => s === suits[0]);
+            // Board cards (some may be hidden depending on stage)
+            boardEl.innerHTML = "";
+            for (let i = 0; i < 5; i++) {
+                let card = board[i];
+                let visible = false;
 
-            let isStraight = true;
-            for (let i = 1; i < ranks.length; i++) {
-                if (rankValue(ranks[i]) !== rankValue(ranks[i - 1]) + 1) {
-                    isStraight = false;
-                    break;
+                if (stage === "flop" && i < 3) visible = true;
+                if (stage === "turn" && i < 4) visible = true;
+                if (stage === "river" && i < 5) visible = true;
+                if (stage === "showdown") visible = true;
+
+                if (!card) {
+                    const placeholder = document.createElement("div");
+                    placeholder.className = "card card-back";
+                    boardEl.appendChild(placeholder);
+                } else {
+                    const el = createCardElement(card, !visible);
+                    boardEl.appendChild(el);
                 }
             }
 
-            // Check for A-10-J-Q-K royal style (we’ll treat as high straight)
-            const isRoyal = isStraight && isFlush && ranks[0] === "10" && ranks[4] === "A";
+            // Stage label text
+            let stageText = "Waiting to deal…";
+            if (stage === "preflop") stageText = "Preflop – hole cards dealt.";
+            if (stage === "flop") stageText = "Flop – first 3 community cards.";
+            if (stage === "turn") stageText = "Turn – 4th community card.";
+            if (stage === "river") stageText = "River – final community card.";
+            if (stage === "showdown") stageText = "Showdown – best hands revealed.";
 
-            // Count ranks
-            const counts = {};
-            for (let r of ranks) {
-                counts[r] = (counts[r] || 0) + 1;
-            }
-            const values = Object.values(counts).sort((a, b) => b - a);
-
-            const hasFour = values[0] === 4;
-            const hasThree = values[0] === 3;
-            const pairCount = values.filter(v => v === 2).length;
-
-            // Check Jacks or Better
-            const highPairs = ["J", "Q", "K", "A"];
-            let hasJacksOrBetter = false;
-            for (let r of highPairs) {
-                if (counts[r] === 2) {
-                    hasJacksOrBetter = true;
-                    break;
-                }
-            }
-
-            if (isRoyal) return { name: "Royal Flush", multiplier: 250 };
-            if (isStraight && isFlush) return { name: "Straight Flush", multiplier: 50 };
-            if (hasFour) return { name: "Four of a Kind", multiplier: 25 };
-            if (hasThree && pairCount === 1) return { name: "Full House", multiplier: 9 };
-            if (isFlush) return { name: "Flush", multiplier: 6 };
-            if (isStraight) return { name: "Straight", multiplier: 4 };
-            if (hasThree) return { name: "Three of a Kind", multiplier: 3 };
-            if (pairCount === 2) return { name: "Two Pair", multiplier: 2 };
-            if (hasJacksOrBetter) return { name: "Jacks or Better", multiplier: 1 };
-
-            return { name: "No Win", multiplier: 0 };
+            stageLabelEl.textContent = stageText;
         }
 
-        function startPokerHand() {
-            vpBet = parseInt(pokerBetInput.value, 10) || 10;
-            if (vpBet < 10) {
-                vpBet = 10;
-                pokerBetInput.value = 10;
+        // ----- Hand Evaluation (5-card core) -----
+        function get5CardRank(cards) {
+            // cards: exactly 5 cards
+            const ranks = cards.map(c => heRankValue(c.rank)).sort((a, b) => b - a); // desc
+            const rankCounts = {};
+            const suitCounts = {};
+
+            for (let c of cards) {
+                const rv = heRankValue(c.rank);
+                rankCounts[rv] = (rankCounts[rv] || 0) + 1;
+                suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
             }
-            if (vpBet > vpBalance) {
-                pokerResultEl.textContent = "Bet cannot exceed balance.";
+
+            const isFlush = Object.values(suitCounts).some(v => v === 5);
+
+            // Straight detection (handle wheel A-2-3-4-5)
+            let isStraight = false;
+            let straightHigh = ranks[0];
+            const uniqueRanks = [...new Set(ranks)].sort((a, b) => b - a);
+
+            if (uniqueRanks.length === 5 && uniqueRanks[0] - uniqueRanks[4] === 4) {
+                isStraight = true;
+                straightHigh = uniqueRanks[0];
+            } else if (
+                uniqueRanks.length === 5 &&
+                uniqueRanks[0] === 12 && // A
+                uniqueRanks[1] === 3 &&  // 5
+                uniqueRanks[2] === 2 &&
+                uniqueRanks[3] === 1 &&
+                uniqueRanks[4] === 0
+            ) {
+                isStraight = true;
+                straightHigh = 3; // 5-high straight
+            }
+
+            const countsArr = Object.entries(rankCounts)
+                .map(([rank, count]) => ({ rank: parseInt(rank, 10), count }))
+                .sort((a, b) => {
+                    if (b.count !== a.count) return b.count - a.count;
+                    return b.rank - a.rank;
+                });
+
+            const counts = countsArr.map(x => x.count);
+            const ranksByFreq = countsArr.map(x => x.rank);
+
+            // Category ranking:
+            // 8 = Straight Flush (incl Royal), 7 = Four of a Kind, 6 = Full House,
+            // 5 = Flush, 4 = Straight, 3 = Trips, 2 = Two Pair, 1 = One Pair, 0 = High Card
+            let category = 0;
+            let kickers = [];
+
+            if (isStraight && isFlush) {
+                category = 8;
+                kickers = [straightHigh];
+            } else if (counts[0] === 4) {
+                // Four of a kind
+                category = 7;
+                const fourRank = ranksByFreq[0];
+                const kicker = ranksByFreq[1];
+                kickers = [fourRank, kicker];
+            } else if (counts[0] === 3 && counts[1] === 2) {
+                // Full house
+                category = 6;
+                const tripRank = ranksByFreq[0];
+                const pairRank = ranksByFreq[1];
+                kickers = [tripRank, pairRank];
+            } else if (isFlush) {
+                category = 5;
+                kickers = ranks; // high card order
+            } else if (isStraight) {
+                category = 4;
+                kickers = [straightHigh];
+            } else if (counts[0] === 3) {
+                // Trips
+                category = 3;
+                const tripRank = ranksByFreq[0];
+                const remaining = [];
+                for (let r of ranks) {
+                    if (r !== tripRank) remaining.push(r);
+                }
+                const sortedRemaining = [...new Set(remaining)].sort((a, b) => b - a);
+                kickers = [tripRank, ...sortedRemaining];
+            } else if (counts[0] === 2 && counts[1] === 2) {
+                // Two pair
+                category = 2;
+                const highPair = Math.max(ranksByFreq[0], ranksByFreq[1]);
+                const lowPair = Math.min(ranksByFreq[0], ranksByFreq[1]);
+                let kicker = ranksByFreq[2];
+                kickers = [highPair, lowPair, kicker];
+            } else if (counts[0] === 2) {
+                // One pair
+                category = 1;
+                const pairRank = ranksByFreq[0];
+                const remaining = [];
+                for (let r of ranks) {
+                    if (r !== pairRank) remaining.push(r);
+                }
+                const sortedRem = [...new Set(remaining)].sort((a, b) => b - a);
+                kickers = [pairRank, ...sortedRem];
+            } else {
+                // High card
+                category = 0;
+                kickers = ranks;
+            }
+
+            return { category, kickers };
+        }
+
+        function compareRanks(a, b) {
+            if (a.category !== b.category) return a.category - b.category;
+            const len = Math.max(a.kickers.length, b.kickers.length);
+            for (let i = 0; i < len; i++) {
+                const av = a.kickers[i] ?? -1;
+                const bv = b.kickers[i] ?? -1;
+                if (av !== bv) return av - bv;
+            }
+            return 0;
+        }
+
+        // Best 5-card hand out of 7
+        function bestOfSeven(cards) {
+            let bestRank = null;
+            // 7 choose 5 = 21 combos
+            for (let a = 0; a < 7; a++) {
+                for (let b = a + 1; b < 7; b++) {
+                    for (let c = b + 1; c < 7; c++) {
+                        for (let d = c + 1; d < 7; d++) {
+                            for (let e = d + 1; e < 7; e++) {
+                                const combo = [cards[a], cards[b], cards[c], cards[d], cards[e]];
+                                const rank = get5CardRank(combo);
+                                if (!bestRank || compareRanks(rank, bestRank) > 0) {
+                                    bestRank = rank;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return bestRank;
+        }
+
+        function categoryNameFromRank(rankObj) {
+            const cat = rankObj.category;
+            const high = rankObj.kickers[0];
+
+            if (cat === 8) {
+                // Straight flush vs royal
+                if (high === 12) return "Royal Flush";
+                return "Straight Flush";
+            }
+            if (cat === 7) return "Four of a Kind";
+            if (cat === 6) return "Full House";
+            if (cat === 5) return "Flush";
+            if (cat === 4) return "Straight";
+            if (cat === 3) return "Three of a Kind";
+            if (cat === 2) return "Two Pair";
+            if (cat === 1) return "One Pair";
+            return "High Card";
+        }
+
+        // ----- Game Flow -----
+        function resetHand() {
+            playerHole = [];
+            dealerHole = [];
+            board = [];
+            stage = "idle";
+            playerHandNameEl.textContent = "—";
+            dealerHandNameEl.textContent = "—";
+            renderHoldem(false);
+        }
+
+        function startHand() {
+            heBet = parseInt(holdemBetInput.value, 10) || 10;
+            if (heBet < 10) {
+                heBet = 10;
+                holdemBetInput.value = 10;
+            }
+            if (heBet > heBalance) {
+                heLog("Bet cannot exceed your balance.");
                 return;
             }
 
-            hasDealt = true;
-            hasDrawn = false;
-            createVpDeck();
-            vpHand = [];
+            createHeDeck();
+            playerHole = [drawCard(), drawCard()];
+            dealerHole = [drawCard(), drawCard()];
+            board = [drawCard(), drawCard(), drawCard(), drawCard(), drawCard()];
+            stage = "preflop";
 
-            for (let i = 0; i < 5; i++) {
-                vpHand.push({ ...vpDeck.pop(), hold: false });
-            }
+            playerHandNameEl.textContent = "—";
+            dealerHandNameEl.textContent = "—";
 
-            vpBalance -= vpBet;
-            pokerBalanceEl.textContent = vpBalance;
-            pokerResultEl.textContent = "Select cards to HOLD, then click Draw.";
+            holdemDealBtn.disabled = true;
+            holdemNextBtn.disabled = false;
+            holdemNewBtn.disabled = true;
+            holdemBetInput.disabled = true;
 
-            pokerDealBtn.disabled = true;
-            pokerDrawBtn.disabled = false;
-            pokerNewBtn.disabled = true;
-            pokerBetInput.disabled = true;
-
-            renderVpHand(true);
+            heLog(`New hand started. Bet: $${heBet}.`);
+            renderHoldem(false);
         }
 
-        function drawPokerHand() {
-            if (!hasDealt || hasDrawn) return;
-            hasDrawn = true;
+        function advanceStage() {
+            if (stage === "preflop") {
+                stage = "flop";
+                heLog("Flop dealt.");
+                renderHoldem(false);
+            } else if (stage === "flop") {
+                stage = "turn";
+                heLog("Turn card dealt.");
+                renderHoldem(false);
+            } else if (stage === "turn") {
+                stage = "river";
+                heLog("River card dealt.");
+                renderHoldem(false);
+            } else if (stage === "river") {
+                doShowdown();
+            }
+        }
 
-            vpHand = vpHand.map(card => {
-                if (card.hold) return card;
-                return { ...vpDeck.pop(), hold: false };
-            });
+        function doShowdown() {
+            stage = "showdown";
 
-            renderVpHand(false);
+            const playerCards = [...playerHole, ...board];
+            const dealerCards = [...dealerHole, ...board];
 
-            const result = evaluateHand(vpHand);
-            if (result.multiplier > 0) {
-                const winAmount = result.multiplier * vpBet;
-                vpBalance += winAmount;
-                pokerResultEl.textContent = `${result.name}! You win $${winAmount}.`;
+            const playerBest = bestOfSeven(playerCards);
+            const dealerBest = bestOfSeven(dealerCards);
+
+            const cmp = compareRanks(playerBest, dealerBest);
+
+            const playerName = categoryNameFromRank(playerBest);
+            const dealerName = categoryNameFromRank(dealerBest);
+
+            playerHandNameEl.textContent = playerName;
+            dealerHandNameEl.textContent = dealerName;
+
+            if (cmp > 0) {
+                heBalance += heBet;
+                heLog(`You win with ${playerName} vs dealer's ${dealerName}. +$${heBet}.`);
+            } else if (cmp < 0) {
+                heBalance -= heBet;
+                heLog(`Dealer wins with ${dealerName} vs your ${playerName}. -$${heBet}.`);
             } else {
-                pokerResultEl.textContent = "No win. Better luck next hand!";
+                heLog(`It's a tie! You both have ${playerName}. Bet returned.`);
             }
 
-            pokerBalanceEl.textContent = vpBalance;
-            pokerDrawBtn.disabled = true;
-            pokerNewBtn.disabled = vpBalance > 0 ? false : true;
+            holdemBalanceEl.textContent = heBalance;
+            renderHoldem(true);
 
-            if (vpBalance <= 0) {
-                pokerResultEl.textContent = "You're out of chips. Refresh to start over.";
+            holdemNextBtn.disabled = true;
+            holdemNewBtn.disabled = heBalance > 0 ? false : true;
+
+            if (heBalance <= 0) {
+                heLog("You're out of chips. Refresh the page to start over.");
             }
         }
 
-        function newPokerHand() {
-            hasDealt = false;
-            hasDrawn = false;
-            vpHand = [];
-            pokerHandEl.innerHTML = "";
-            pokerResultEl.textContent = "Place your bet and deal.";
-            pokerDealBtn.disabled = vpBalance <= 0;
-            pokerNewBtn.disabled = true;
-            pokerBetInput.disabled = false;
+        function newHand() {
+            resetHand();
+            holdemDealBtn.disabled = heBalance <= 0;
+            holdemNextBtn.disabled = true;
+            holdemNewBtn.disabled = true;
+            holdemBetInput.disabled = false;
+            heLog("Ready for a new hand.");
         }
 
-        pokerDealBtn.addEventListener("click", startPokerHand);
-        pokerDrawBtn.addEventListener("click", drawPokerHand);
-        pokerNewBtn.addEventListener("click", newPokerHand);
+        // ----- Event Listeners -----
+        holdemDealBtn.addEventListener("click", startHand);
+        holdemNextBtn.addEventListener("click", advanceStage);
+        holdemNewBtn.addEventListener("click", newHand);
 
         // Init
-        createVpDeck();
-        pokerBalanceEl.textContent = vpBalance;
+        resetHand();
+        holdemBalanceEl.textContent = heBalance;
     </script>
 </body>
 </html>
